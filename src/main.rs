@@ -11,11 +11,46 @@ struct Cli {
     arg2: Option<String>,
 }
 
+struct FileStats {
+    word_frequency: HashMap<String, i32>,
+    total_words: i32,
+    longest_word: String,
+}
+
+impl FileStats {
+    fn print(&self, elem: &str) {
+        match elem {
+            "all" => {
+                self.print_frequent_words();
+                println!("For a total of {} words", self.total_words);
+                println!("With the longest being {}", self.longest_word);
+            }
+            "frequent_words" => self.print_frequent_words(),
+            "total" => println!("Total amount of words : {}", self.total_words),
+            "longest" => println!("Longest word is {}", self.longest_word),
+            _ => panic!("Unknown print element"),
+        }
+    }
+    fn print_frequent_words(&self) {
+        println!("Frequent words : ");
+        let mut sorted_values: Vec<(String, i32)> = self
+            .word_frequency
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
+        sorted_values.sort_by(|a, b| b.1.cmp(&a.1));
+        for (word, count) in sorted_values {
+            println!("  | {} : {}", word, count);
+        }
+    }
+}
+
 #[derive(clap::ValueEnum, Clone)]
 enum Command {
     Search,
     Count,
     Replace,
+    Stats,
 }
 
 fn main() {
@@ -35,6 +70,7 @@ fn run(statement: Cli) -> Result<(), Box<dyn std::error::Error>> {
             statement.arg1.as_deref(),
             statement.arg2.as_deref(),
         )?,
+        Command::Stats => stats(&statement.path)?,
     }
     Ok(())
 }
@@ -117,35 +153,37 @@ fn replace(
     Ok(())
 }
 
-fn stats(
-    path: &std::path::PathBuf,
-) -> Result<HashMap<String, HashMap<String, i32>>, Box<dyn std::error::Error>> {
+fn stats(path: &std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     let file = fs::File::open(path)?;
     let reader = BufReader::new(file);
-    let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
-    let frequent_words = match get_frequent_words(path, reader) {
-        Ok(dict) => dict,
+    match get_filedata(reader) {
+        Ok(result) => result.print("all"),
         Err(err) => {
             eprintln!("No words found");
             eprintln!("{}", err);
-            HashMap::new()
         }
     };
-    result.insert("frequent_words".to_string(), frequent_words);
-    Ok(result)
+    Ok(())
 }
 
-fn get_frequent_words(
-    path: &std::path::PathBuf,
-    reader: BufReader<fs::File>,
-) -> Result<HashMap<String, i32>, Box<dyn std::error::Error>> {
+fn get_filedata(reader: BufReader<fs::File>) -> Result<FileStats, Box<dyn std::error::Error>> {
     let mut frequent_words: HashMap<String, i32> = HashMap::new();
+    let mut total = 0;
+    let mut longest = String::new();
     for line in reader.lines() {
         let line = line?;
         let words = line.split_whitespace();
         for word in words {
-            *frequent_words.entry(word.to_string()).or_insert(1) += 1;
+            *frequent_words.entry(word.to_string()).or_insert(0) += 1;
+            total += 1;
+            if longest.len() < word.len() {
+                longest = word.to_string();
+            }
         }
     }
-    Ok(frequent_words)
+    Ok(FileStats {
+        word_frequency: frequent_words,
+        total_words: total,
+        longest_word: longest,
+    })
 }
