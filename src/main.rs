@@ -15,6 +15,8 @@ struct FileStats {
     word_frequency: HashMap<String, i32>,
     total_words: i32,
     longest_word: String,
+    shortest_word: String,
+    avg_length: i32,
 }
 
 impl FileStats {
@@ -23,11 +25,15 @@ impl FileStats {
             "all" => {
                 self.print_frequent_words();
                 println!("For a total of {} words", self.total_words);
-                println!("With the longest being {}", self.longest_word);
+                println!("With the longest being \"{}\"", self.longest_word);
+                println!("And the shortest being \"{}\"", self.shortest_word);
+                println!("The average word length is {} characters", self.avg_length);
             }
             "frequent_words" => self.print_frequent_words(),
             "total" => println!("Total amount of words : {}", self.total_words),
             "longest" => println!("Longest word is {}", self.longest_word),
+            "shortest" => println!("Shortest word is {}", self.longest_word),
+            "average" => println!("The average word length is {} characters", self.avg_length),
             _ => panic!("Unknown print element"),
         }
     }
@@ -168,22 +174,37 @@ fn stats(path: &std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
 
 fn get_filedata(reader: BufReader<fs::File>) -> Result<FileStats, Box<dyn std::error::Error>> {
     let mut frequent_words: HashMap<String, i32> = HashMap::new();
-    let mut total = 0;
+    let mut total: i32 = 0;
+    let mut total_text_length: i32 = 0;
     let mut longest = String::new();
+    let mut shortest = String::new();
     for line in reader.lines() {
         let line = line?;
         let words = line.split_whitespace();
         for word in words {
+            let word = word
+                .trim_matches(|c: char| !c.is_alphabetic())
+                .to_lowercase();
+            if shortest == String::new() {
+                shortest = word.to_string();
+            }
             *frequent_words.entry(word.to_string()).or_insert(0) += 1;
             total += 1;
             if longest.len() < word.len() {
                 longest = word.to_string();
             }
+            if shortest.len() > word.len() {
+                shortest = word.to_string();
+            }
+            total_text_length += word.len() as i32;
         }
     }
+    let average_length: i32 = total_text_length / total;
     Ok(FileStats {
         word_frequency: frequent_words,
         total_words: total,
         longest_word: longest,
+        shortest_word: shortest,
+        avg_length: average_length,
     })
 }
